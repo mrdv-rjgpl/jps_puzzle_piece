@@ -19,12 +19,13 @@ class PuzzlePieceIdentifier
     Rect region_of_interest;
 
   public:
-    PuzzlePieceIdentifier(ros::NodeHandle *nh, char *img_file_name, int x, int y, int width, int height);
+    PuzzlePieceIdentifier(ros::NodeHandle *nh, char *img_file_name, bool use_roi, int x, int y, int width, int height);
 };
 
 PuzzlePieceIdentifier::PuzzlePieceIdentifier(
     ros::NodeHandle *nh,
     char *img_file_name,
+    bool use_roi,
     int x,
     int y,
     int width,
@@ -35,9 +36,17 @@ PuzzlePieceIdentifier::PuzzlePieceIdentifier(
 
   if(img_raw.data)
   {
-    this->region_of_interest = Rect(x, y, width, height);
-    this->img_gray = Mat(Size(region_of_interest.width, region_of_interest.height), img_raw.type());
-    cvtColor(img_raw(region_of_interest), this->img_gray, CV_RGB2GRAY);
+    if(use_roi)
+    {
+      this->region_of_interest = Rect(x, y, width, height);
+      this->img_gray = Mat(Size(region_of_interest.width, region_of_interest.height), img_raw.type());
+      cvtColor(img_raw(region_of_interest), this->img_gray, CV_RGB2GRAY);
+    }
+    else
+    {
+      this->img_gray = Mat(img_raw.size(), img_raw.type());
+      cvtColor(img_raw, this->img_gray, CV_RGB2GRAY);
+    }
   }
   else
   {
@@ -45,12 +54,12 @@ PuzzlePieceIdentifier::PuzzlePieceIdentifier(
   }
 
   ROS_INFO_STREAM("Median blurring image of type " << img_gray.type() << "...");
-  Mat img_blur(img_gray.size(), img_gray.type());
-  medianBlur(img_gray, img_blur, 5);
+  Mat img_blur(this->img_gray.size(), this->img_gray.type());
+  medianBlur(this->img_gray, img_blur, 5);
 
   ROS_INFO_STREAM("Thresholding image...");
   Mat img_thresh(img_blur.size(), img_blur.type());
-  threshold(img_blur, img_thresh, 150, 255, THRESH_BINARY_INV);
+  threshold(img_blur, img_thresh, 120, 255, THRESH_BINARY_INV);
 
   ROS_INFO_STREAM("Blurring image...");
   blur(img_thresh, img_blur, Size(3, 3));
@@ -106,7 +115,8 @@ int main(int argc, char **argv)
 
   if(argc == 2)
   {
-    PuzzlePieceIdentifier p(&nh, argv[1], 200, 180, 300, 300);
+    // PuzzlePieceIdentifier p(&nh, argv[1], 200, 180, 300, 300);
+    PuzzlePieceIdentifier p(&nh, argv[1], false, 0, 0, 1278, 951);
   }
   else
   {
