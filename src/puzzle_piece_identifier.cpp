@@ -8,6 +8,8 @@
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
 
+#include <string>
+
 using namespace cv;
 using namespace std;
 
@@ -19,12 +21,12 @@ class PuzzlePieceIdentifier
     Rect region_of_interest;
 
   public:
-    PuzzlePieceIdentifier(ros::NodeHandle *nh, char *img_file_name, bool use_roi, int x, int y, int width, int height);
+    PuzzlePieceIdentifier(ros::NodeHandle *nh, string img_file_name, bool use_roi, int x, int y, int width, int height);
 };
 
 PuzzlePieceIdentifier::PuzzlePieceIdentifier(
     ros::NodeHandle *nh,
-    char *img_file_name,
+    string img_file_name,
     bool use_roi,
     int x,
     int y,
@@ -103,6 +105,9 @@ PuzzlePieceIdentifier::PuzzlePieceIdentifier(
     drawContours(img_edges, contours, i, Scalar(rand() % 256, rand() % 256, rand() % 256), 2); // Thickness = 2
   }
 
+  string out_file_name;
+  // imwrite(out_file_name, img_edges);
+
   namedWindow("display_window", WINDOW_AUTOSIZE);
   imshow("display_window", img_edges);
   waitKey(0);
@@ -115,7 +120,6 @@ int main(int argc, char **argv)
 
   if(argc == 2)
   {
-    // PuzzlePieceIdentifier p(&nh, argv[1], 200, 180, 300, 300);
     PuzzlePieceIdentifier p(&nh, argv[1], false, 0, 0, 1278, 951);
   }
   else
