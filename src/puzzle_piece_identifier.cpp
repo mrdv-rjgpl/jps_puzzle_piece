@@ -99,10 +99,15 @@ PuzzlePieceIdentifier::PuzzlePieceIdentifier(
   findContours(img_blur, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
   ROS_INFO_STREAM(contours.size() << " contours found.");
   Mat img_edges = Mat::zeros(img_blur.size(), CV_8UC3);
+  vector<Point2f> centroids(contours.size());
 
   for(i = 0; i < contours.size(); ++i)
   {
-    drawContours(img_edges, contours, i, Scalar(rand() % 256, rand() % 256, rand() % 256), 2); // Thickness = 2
+    Moments mu = moments(contours[i], false);
+    centroids[i] = Point2f(mu.m10 / mu.m00, mu.m01 / mu.m00);
+    Scalar colour = Scalar(rand() % 256, rand() % 256, rand() % 256);
+    drawContours(img_edges, contours, i, colour, 2); // Thickness = 2
+    circle(img_edges, centroids[i], 16, colour, -1, 8, 0);
   }
 
   string out_file_name;
