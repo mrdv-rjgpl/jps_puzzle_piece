@@ -2,5 +2,5 @@
 	<param name="img_file_name" value="/media/mardava/DATA/Academics/530_707_robot_sys_prog/530_707_independent_project/dat/20190331/pic1.png" type="string" />
 
 	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" output="screen" />
-	<node pkg="jps_puzzle_piece" type="piece_image_supplier" name="piece_image_supplier_node" output="screen" />
+	<node pkg="jps_puzzle_piece" type="piece_image_supplier" name="piece_image_supplier_node" />
 </launch>
