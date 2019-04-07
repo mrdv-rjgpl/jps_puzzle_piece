@@ -26,7 +26,8 @@ class PieceParser
   public:
     PieceParser(ros::NodeHandle& nh);
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
-    void imageBinarize(Mat img_raw);
+    void binarizeImage(Mat img_raw);
+    vector< vector< Point> > findPieces(void);
 };
 
 PieceParser::PieceParser(ros::NodeHandle& nh)
@@ -39,16 +40,11 @@ PieceParser::PieceParser(ros::NodeHandle& nh)
 
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 {
-  Mat conn_centroids;
-  Mat img_labels;
-  Mat img_stats;
-
   // Binarize the image with preset thresholds.
   // TODO: tweak the thresholds if need be.
-  this->imageBinarize(cv_bridge::toCvShare(msg, "bgr8")->image);
+  this->binarizeImage(cv_bridge::toCvShare(msg, "bgr8")->image);
 
   // Obtain the connected components and their centroids.
-  int num_labels = connectedComponentsWithStats(this->img_bin, img_labels, img_stats, conn_centroids);
   ROS_INFO_STREAM(num_labels << " connected components identified, with " << conn_centroids.size() <<  " centroids.");
 
   namedWindow("display_window", WINDOW_AUTOSIZE);
@@ -56,7 +52,7 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
   waitKey(1);
 }
 
-void PieceParser::imageBinarize(Mat img_input)
+void PieceParser::binarizeImage(Mat img_input)
 {
   Mat img_blur;
   Mat img_thresh;
@@ -77,6 +73,14 @@ void PieceParser::imageBinarize(Mat img_input)
   medianBlur(this->img_bin, img_blur, 5);
   threshold(img_blur, img_thresh, 120, 255, THRESH_BINARY_INV);
   blur(img_thresh, this->img_bin, Size(3, 3));
+}
+
+vector< vector<Point> > PieceParser::findPieces(void)
+{
+  vector< vector<Point> > contours;
+  findContours(this->img_bin, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+  return contours;
 }
 
 /*
