@@ -1,6 +1,8 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
+#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/xfeatures2d/xfeatures2d.hpp>
 
 #include <ros/ros.h>
 
@@ -16,6 +18,7 @@
 #include <exception>
 
 using namespace cv;
+using namespace cv::xfeatures2d;
 using namespace std;
 
 vector<Scalar> colours;
@@ -38,14 +41,16 @@ class PieceParser
 
   public:
     PieceParser(ros::NodeHandle& nh);
-    void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
-    void binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size);
-    vector< vector< Point> > findPieces(int area_threshold, int num_pixel_threshold, int edge_distance_threshold);
+
     vector<Point> getEdges(
         vector<Point> piece_contour,
         int block_size,
         int aperture_size,
         double harris_free_param);
+    vector< vector< Point> > findPieces(int area_threshold, int num_pixel_threshold, int edge_distance_threshold);
+    void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
+    void binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size);
+    vector<KeyPoint> extractSurfFeatures(int min_hessian);
 };
 
 PieceParser::PieceParser(ros::NodeHandle& nh)
@@ -126,6 +131,17 @@ vector<Point> PieceParser::getEdges(
   ROS_INFO_STREAM("Maximum Harris corner values successfully obtained.");
 
   return corner_points_vec;
+}
+
+vector<KeyPoint> PieceParser::extractSurfFeatures(Mat img_input, int min_hessian)
+{
+  Ptr<SURF> detector = SURF::create(min_hessian);
+  vector<KeyPoint> key_points;
+
+  detector->detect(img_input, key_points);
+  ROS_INFO_STREAM("SURF features successfully extracted.");
+
+  return key_points;
 }
 
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
