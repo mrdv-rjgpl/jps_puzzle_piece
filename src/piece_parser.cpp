@@ -53,7 +53,7 @@ PieceParser::PieceParser(ros::NodeHandle& nh)
   ROS_INFO("Initializing piece parser...");
   this->nh = ros::NodeHandle(nh);
   this->img_transport = new image_transport::ImageTransport(this->nh);
-  this->image_sub = this->img_transport->subscribe("/camera/image", 1, &PieceParser::imageSubscriberCallback, this);
+  this->image_sub = this->img_transport->subscribe("/usb_cam/image_raw", 1, &PieceParser::imageSubscriberCallback, this);
 }
 
 vector<Point> PieceParser::getEdges(
