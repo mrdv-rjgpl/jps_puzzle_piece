@@ -13,7 +13,7 @@
 using namespace cv;
 using namespace std;
 
-class PieceImageSupplier
+class TestPieceImageSupplier
 {
   private:
     ros::NodeHandle nh;
@@ -22,27 +22,27 @@ class PieceImageSupplier
     ros::Timer timer;
 
   public:
-    PieceImageSupplier(ros::NodeHandle& nh);
+    TestPieceImageSupplier(ros::NodeHandle& nh);
     void timerCallback(const ros::TimerEvent& event);
 };
 
-PieceImageSupplier::PieceImageSupplier(ros::NodeHandle& nh)
+TestPieceImageSupplier::TestPieceImageSupplier(ros::NodeHandle& nh)
 {
   ROS_INFO("Initializing piece image supplier...");
   this->nh = ros::NodeHandle(nh);
   this->img_transport = new image_transport::ImageTransport(this->nh);
   this->image_pub = this->img_transport->advertise("camera/image", 1);
-  this->timer = this->nh.createTimer(ros::Duration(0.1), &PieceImageSupplier::timerCallback, this);
+  this->timer = this->nh.createTimer(ros::Duration(0.1), &TestPieceImageSupplier::timerCallback, this);
 }
 
-void PieceImageSupplier::timerCallback(const ros::TimerEvent& event)
+void TestPieceImageSupplier::timerCallback(const ros::TimerEvent& event)
 {
   string img_file_name;
   ROS_INFO("Fetching image file name...");
 
   if(this->nh.getParam("img_file_name", img_file_name))
   {
-    cv::Mat img = cv::imread(img_file_name, CV_LOAD_IMAGE_COLOR);
+    Mat img = imread(img_file_name, CV_LOAD_IMAGE_COLOR);
     sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
     ROS_INFO("Publishing image_transport message...");
     this->image_pub.publish(msg);
@@ -55,9 +55,9 @@ void PieceImageSupplier::timerCallback(const ros::TimerEvent& event)
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "piece_image_supplier");
+  ros::init(argc, argv, "test_piece_image_supplier_node");
   ros::NodeHandle nh;
-  PieceImageSupplier p(nh);
+  TestPieceImageSupplier p(nh);
   ros::spin();
 
   return 0;

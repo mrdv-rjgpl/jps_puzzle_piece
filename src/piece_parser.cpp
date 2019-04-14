@@ -1,8 +1,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/xfeatures2d.hpp>
 
 #include <ros/ros.h>
 
@@ -18,7 +16,6 @@
 #include <exception>
 
 using namespace cv;
-using namespace cv::xfeatures2d;
 using namespace std;
 
 vector<Scalar> colours;
@@ -50,7 +47,6 @@ class PieceParser
     vector< vector< Point> > findPieces(int area_threshold, int num_pixel_threshold, int edge_distance_threshold);
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
     void binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size);
-    vector<KeyPoint> extractSurfFeatures(Mat img_input, int min_hessian);
 };
 
 PieceParser::PieceParser(ros::NodeHandle& nh)
@@ -133,17 +129,6 @@ vector<Point> PieceParser::getEdges(
   return corner_points_vec;
 }
 
-vector<KeyPoint> PieceParser::extractSurfFeatures(Mat img_input, int min_hessian)
-{
-  Ptr<SURF> detector = SURF::create(min_hessian);
-  vector<KeyPoint> key_points;
-
-  detector->detect(img_input, key_points);
-  ROS_INFO_STREAM("SURF features successfully extracted.");
-
-  return key_points;
-}
-
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 {
   int i;
@@ -152,7 +137,7 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
   // Binarize the image with preset thresholds.
   // TODO: tweak the thresholds if need be.
   ROS_INFO("Binarizing image...");
-  Mat img_raw =cv_bridge::toCvShare(msg, "bgr8")->image;
+  Mat img_raw = cv_bridge::toCvShare(msg, "bgr8")->image;
   this->binarizeImage(img_raw, 5, 105, 3);
 
   // Obtain the connected components and their centroids.

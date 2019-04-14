@@ -209,5 +209,5 @@ include_directories(
 
 add_executable(piece_parser src/piece_parser.cpp)
 target_link_libraries(piece_parser ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
-add_executable(test_image_supplier src/test_image_supplier.cpp)
-target_link_libraries(test_image_supplier ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+add_executable(test_piece_image_supplier src/test_piece_image_supplier.cpp)
+target_link_libraries(test_piece_image_supplier ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
