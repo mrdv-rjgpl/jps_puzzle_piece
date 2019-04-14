@@ -2,7 +2,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
 #include <opencv2/features2d/features2d.hpp>
-#include <opencv2/xfeatures2d/xfeatures2d.hpp>
+#include <opencv2/xfeatures2d.hpp>
 
 #include <ros/ros.h>
 
@@ -50,7 +50,7 @@ class PieceParser
     vector< vector< Point> > findPieces(int area_threshold, int num_pixel_threshold, int edge_distance_threshold);
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
     void binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size);
-    vector<KeyPoint> extractSurfFeatures(int min_hessian);
+    vector<KeyPoint> extractSurfFeatures(Mat img_input, int min_hessian);
 };
 
 PieceParser::PieceParser(ros::NodeHandle& nh)
