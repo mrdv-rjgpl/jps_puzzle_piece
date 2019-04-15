@@ -23,13 +23,48 @@ vector<Scalar> colours;
 class PieceParser
 {
   private:
-    ros::NodeHandle nh;
+    /*
+     * \brief Image transporter
+     */
     image_transport::ImageTransport *img_transport;
-    Mat img_bin;
-    Mat img_gray;
+    /*
+     * \brief Image subscriber object
+     */
     image_transport::Subscriber image_sub;
+    /*
+     * \brief Binarized image
+     */
+    Mat img_bin;
+    /*
+     * \brief Grayscaled image
+     */
+    Mat img_gray;
+    /*
+     * \brief ROS node handler
+     */
+    ros::NodeHandle nh;
+    /*
+     * \brief Image publisher object
+     */
     ros::Publisher image_pub;
-    // TODO: Figure out what unary predicates are, and how to use them within a class.
+
+    /*
+     * \brief Check the current contour to determine if it is a valid image of a piece
+     *
+     * \details The candidate must be above an area threshold, with at most num_pixel_threshold pixels within
+     * edge_distance_threshold of the edges of the image.
+     * TODO: Figure out what unary predicates are, and how to use them within a class.
+     *
+     * \param[in] piece_candidate The contour to be checked
+     * \param[in] area_threshold The minimum area for a puzzle piece
+     * \param[in] num_pixel_threshold The maximum number of pixels close to the image edge
+     * \param[in] edge_distance_threshold The distance from the edge outside of which the piece must be
+     *
+     * \retval true If the image contains a valid puzzle piece
+     * \retval false If the image does not contain a valid puzzle piece
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
     bool checkPiece(
         vector<Point> piece_candidate,
         int area_threshold,
@@ -37,17 +72,113 @@ class PieceParser
         int edge_distance_threshold);
 
   public:
+    /*
+     * \brief Construct an object of the type PieceParser
+     *
+     * \param[in] nh The ROS node handler
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
     PieceParser(ros::NodeHandle& nh);
-
+    /*
+     * \brief Get the edges of the puzzle piece
+     *
+     * \param[in] piece_contour The contour of the piece
+     * \param[in] block_size The block size to be used with the Harris corner detector
+     * \param[in] aperture_size The aperture size to be used with the Harris corner detector
+     * \param[in] harris_free_param The free parameter 'k' to be used with the Harris corner detector
+     *
+     * \return The edges of the piece
+     */
     vector<Point> getEdges(
         vector<Point> piece_contour,
         int block_size,
         int aperture_size,
         double harris_free_param);
+    /*
+     * \brief Find all puzzle pieces in the given image
+     *
+     * \param[in] area_threshold The minimum area for a puzzle piece
+     * \param[in] num_pixel_threshold The maximum number of pixels close to the image edge
+     * \param[in] edge_distance_threshold The distance from the edge outside of which the piece must be
+     *
+     * \return The vector of contours of valid puzzle pieces in the supplied image
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
     vector< vector< Point> > findPieces(int area_threshold, int num_pixel_threshold, int edge_distance_threshold);
+    /*
+     * \brief Callback function for the image subscriber object
+     *
+     * \param[in] msg The message containing the latest image from the camera
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
+    /*
+     * \brief Binarize the image
+     *
+     * \param[in] img_input The input image to be binarized
+     * \param[in] median_blur_size The size to be used for median blurring
+     * \param[in] bin_threshold The threshold for image binarization
+     * \param[in] blur_kernel_size The kernel size to be used for blurring
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
     void binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size);
 };
+
+bool PieceParser::checkPiece(
+    vector<Point> piece_candidate,
+    int area_threshold,
+    int num_pixel_threshold,
+    int edge_distance_threshold)
+{
+  bool piece_validity = true;
+  vector<Point>::iterator pixel_iter = piece_candidate.begin();
+  int num_pixels_near_edges = 0;
+
+  // Ensure that the area is above a certain threshold.
+  if(contourArea(piece_candidate) < area_threshold)
+  {
+    piece_validity = false;
+  }
+  else
+  {
+    // No operation
+  }
+
+  // Ensure that the piece candidate is not close to the edge of the image.
+  while((piece_validity == true) && (pixel_iter != piece_candidate.end()))
+  {
+    if((pixel_iter->x < edge_distance_threshold)
+        || (pixel_iter->x >= this->img_bin.cols - edge_distance_threshold)
+        || (pixel_iter->y < edge_distance_threshold)
+        || (pixel_iter->y >= this->img_bin.rows - edge_distance_threshold))
+    {
+      ++num_pixels_near_edges;
+
+      if(num_pixels_near_edges >= num_pixel_threshold)
+      {
+        piece_validity = false;
+
+        break;
+      }
+      else
+      {
+        // No operation
+      }
+    }
+    else
+    {
+      // No operation
+    }
+
+    ++pixel_iter;
+  }
+
+  return piece_validity;
+}
 
 PieceParser::PieceParser(ros::NodeHandle& nh)
 {
@@ -129,6 +260,31 @@ vector<Point> PieceParser::getEdges(
   return corner_points_vec;
 }
 
+vector< vector<Point> > PieceParser::findPieces(
+    int area_threshold,
+    int num_pixel_threshold,
+    int edge_distance_threshold)
+{
+  int i;
+  vector< vector<Point> > piece_contours;
+  vector< vector<Point> > piece_candidates;
+  findContours(this->img_bin, piece_candidates, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+  for(i = 0; i < piece_candidates.size(); ++i)
+  {
+    if(this->checkPiece(piece_candidates[i], area_threshold, num_pixel_threshold, edge_distance_threshold))
+    {
+      piece_contours.push_back(piece_candidates[i]);
+    }
+    else
+    {
+      // No operation
+    }
+  }
+
+  return piece_contours;
+}
+
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 {
   int i;
@@ -194,83 +350,6 @@ void PieceParser::binarizeImage(Mat img_input, int median_blur_size, int bin_thr
   img_thresh = Mat(this->img_gray.size(), this->img_gray.type());
   threshold(img_blur, img_thresh, bin_threshold, 255, THRESH_BINARY_INV);
   blur(img_thresh, this->img_bin, Size(blur_kernel_size, blur_kernel_size));
-}
-
-vector< vector<Point> > PieceParser::findPieces(
-    int area_threshold,
-    int num_pixel_threshold,
-    int edge_distance_threshold)
-{
-  int i;
-  vector< vector<Point> > piece_contours;
-  vector< vector<Point> > piece_candidates;
-  findContours(this->img_bin, piece_candidates, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-
-  for(i = 0; i < piece_candidates.size(); ++i)
-  {
-    if(this->checkPiece(piece_candidates[i], area_threshold, num_pixel_threshold, edge_distance_threshold))
-    {
-      piece_contours.push_back(piece_candidates[i]);
-    }
-    else
-    {
-      // No operation
-    }
-  }
-
-  return piece_contours;
-}
-
-bool PieceParser::checkPiece(
-    vector<Point> piece_candidate,
-    int area_threshold,
-    int num_pixel_threshold,
-    int edge_distance_threshold)
-{
-  bool piece_validity = true;
-  vector<Point>::iterator pixel_iter = piece_candidate.begin();
-  int num_pixels_near_edges = 0;
-
-  // Ensure that the area is above a certain threshold.
-  if(contourArea(piece_candidate) < area_threshold)
-  {
-    piece_validity = false;
-  }
-  else
-  {
-    // No operation
-  }
-
-  // Ensure that the piece candidate is not close to the edge of the image.
-  while((piece_validity == true) && (pixel_iter != piece_candidate.end()))
-  {
-    if((pixel_iter->x < edge_distance_threshold)
-        || (pixel_iter->x >= this->img_bin.cols - edge_distance_threshold)
-        || (pixel_iter->y < edge_distance_threshold)
-        || (pixel_iter->y >= this->img_bin.rows - edge_distance_threshold))
-    {
-      ++num_pixels_near_edges;
-
-      if(num_pixels_near_edges >= num_pixel_threshold)
-      {
-        piece_validity = false;
-
-        break;
-      }
-      else
-      {
-        // No operation
-      }
-    }
-    else
-    {
-      // No operation
-    }
-
-    ++pixel_iter;
-  }
-
-  return piece_validity;
 }
 
 int main(int argc, char **argv)
