@@ -277,7 +277,7 @@ int main(int argc, char **argv)
 {
   colours.push_back(Scalar(int(0.741 * 256), int(0.447 * 256), int(0.000 * 256)));
   colours.push_back(Scalar(int(0.098 * 256), int(0.325 * 256), int(0.850 * 256)));
-  ros::init(argc, argv, "piece_parser");
+  ros::init(argc, argv, "piece_parser_node");
   ros::NodeHandle nh;
   PieceParser p(nh);
   ros::spin();
