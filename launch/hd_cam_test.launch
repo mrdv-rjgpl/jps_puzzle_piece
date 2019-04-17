@@ -1,5 +1,7 @@
 <launch>
 	<include file="$(find jps_puzzle_piece)/launch/piece_parser.launch" />
+  <param name="/piece_parser/input_image" value="/usb_cam/image_raw" />
+
 
 	<node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen" >
 		<param name="video_device" value="/dev/video1" />

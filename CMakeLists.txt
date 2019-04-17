@@ -13,9 +13,11 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   roscpp
   rospy
+  rtabmap_ros
   sensor_msgs
   std_msgs
   tf
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -53,11 +55,9 @@ find_package(OpenCV REQUIRED)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  DIRECTORY msg FILES ImageWithContour.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -74,10 +74,11 @@ find_package(OpenCV REQUIRED)
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   geometry_msgs#   sensor_msgs#   std_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+#  geometry_msgs
+  rtabmap_ros  sensor_msgs  std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -111,7 +112,7 @@ find_package(OpenCV REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES jps_puzzle_piece
-  CATKIN_DEPENDS cv_bridge geometry_msgs image_transport roscpp rospy sensor_msgs std_msgs tf
+  CATKIN_DEPENDS cv_bridge geometry_msgs image_transport roscpp rospy rtabmap_ros sensor_msgs std_msgs tf message_runtime
   DEPENDS OpenCV
 #  CFG_EXTRAS cv_bridge-extras.cmake
 #  DEPENDS system_lib

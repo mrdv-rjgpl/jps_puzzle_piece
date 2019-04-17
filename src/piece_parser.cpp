@@ -7,6 +7,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
+#include <geometry_msgs/Point.h>
 
 #include <string>
 
@@ -14,6 +15,7 @@
 #include <functional>
 
 #include <exception>
+#include "jps_puzzle_piece/ImageWithContour.h"
 
 using namespace cv;
 using namespace std;
@@ -49,16 +51,21 @@ class PieceParser
     ros::Publisher image_pub;
 
     /*
-     * \brief Check the current contour to determine if it is a valid image of a piece
+     * \brief Check the current contour to determine if it is a valid image of
+     * a piece
      *
-     * \details The candidate must be above an area threshold, with at most num_pixel_threshold pixels within
-     * edge_distance_threshold of the edges of the image.
-     * TODO: Figure out what unary predicates are, and how to use them within a class.
+     * \details The candidate must be above an area threshold, with at most
+     * num_pixel_threshold pixels within edge_distance_threshold of the edges
+     * of the image.
+     * TODO: Figure out what unary predicates are, and how to use them within a
+     * class.
      *
      * \param[in] piece_candidate The contour to be checked
      * \param[in] area_threshold The minimum area for a puzzle piece
-     * \param[in] num_pixel_threshold The maximum number of pixels close to the image edge
-     * \param[in] edge_distance_threshold The distance from the edge outside of which the piece must be
+     * \param[in] num_pixel_threshold The maximum number of pixels close to the
+     * image edge
+     * \param[in] edge_distance_threshold The distance from the edge outside of
+     * which the piece must be
      *
      * \retval true If the image contains a valid puzzle piece
      * \retval false If the image does not contain a valid puzzle piece
@@ -84,9 +91,12 @@ class PieceParser
      * \brief Get the edges of the puzzle piece
      *
      * \param[in] piece_contour The contour of the piece
-     * \param[in] block_size The block size to be used with the Harris corner detector
-     * \param[in] aperture_size The aperture size to be used with the Harris corner detector
-     * \param[in] harris_free_param The free parameter 'k' to be used with the Harris corner detector
+     * \param[in] block_size The block size to be used with the Harris corner
+     * detector
+     * \param[in] aperture_size The aperture size to be used with the Harris
+     * corner detector
+     * \param[in] harris_free_param The free parameter 'k' to be used with the
+     * Harris corner detector
      *
      * \return The edges of the piece
      */
@@ -99,14 +109,20 @@ class PieceParser
      * \brief Find all puzzle pieces in the given image
      *
      * \param[in] area_threshold The minimum area for a puzzle piece
-     * \param[in] num_pixel_threshold The maximum number of pixels close to the image edge
-     * \param[in] edge_distance_threshold The distance from the edge outside of which the piece must be
+     * \param[in] num_pixel_threshold The maximum number of pixels close to the
+     * image edge
+     * \param[in] edge_distance_threshold The distance from the edge outside of
+     * which the piece must be
      *
-     * \return The vector of contours of valid puzzle pieces in the supplied image
+     * \return The vector of contours of valid puzzle pieces in the supplied
+     * image
      *
      * \author Mardava Gubbi <mgubbi1@jhu.edu>
      */
-    vector< vector< Point> > findPieces(int area_threshold, int num_pixel_threshold, int edge_distance_threshold);
+    vector< vector< Point> > findPieces(
+        int area_threshold,
+        int num_pixel_threshold,
+        int edge_distance_threshold);
     /*
      * \brief Callback function for the image subscriber object
      *
@@ -125,7 +141,11 @@ class PieceParser
      *
      * \author Mardava Gubbi <mgubbi1@jhu.edu>
      */
-    void binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size);
+    void binarizeImage(
+        Mat img_input,
+        int median_blur_size,
+        int bin_threshold,
+        int blur_kernel_size);
 };
 
 bool PieceParser::checkPiece(
@@ -182,10 +202,26 @@ bool PieceParser::checkPiece(
 
 PieceParser::PieceParser(ros::NodeHandle& nh)
 {
+  string input_image_topic;
   ROS_INFO("Initializing piece parser...");
   this->nh = ros::NodeHandle(nh);
   this->img_transport = new image_transport::ImageTransport(this->nh);
-  this->image_sub = this->img_transport->subscribe("/usb_cam/image_raw", 1, &PieceParser::imageSubscriberCallback, this);
+  this->image_pub = this->nh.advertise<jps_puzzle_piece::ImageWithContour>(
+      "/piece_parser/image_piece",
+      1000);
+
+  if(this->nh.getParam("/piece_parser/input_image_topic", input_image_topic))
+  {
+    this->image_sub = this->img_transport->subscribe(
+        input_image_topic,
+        1,
+        &PieceParser::imageSubscriberCallback,
+        this);
+  }
+  else
+  {
+    ROS_ERROR("Could not obtain input image topic from parameter list.");
+  }
 }
 
 vector<Point> PieceParser::getEdges(
@@ -197,13 +233,19 @@ vector<Point> PieceParser::getEdges(
   int i;
   int j;
   int k;
-  int max_corner_points = 32; // Twice of what we need, should contain the required corners.
+  // Max corner points is twice that required, to contain the piece corners.
+  int max_corner_points = 32;
   int pixel_dist_threshold = 10;
 
   ROS_INFO("Initializing Harris corner matrix...");
   Mat harris_corners = Mat::zeros(this->img_gray.size(), CV_32FC1);
   ROS_INFO("Fetching Harris corners...");
-  cornerHarris(this->img_gray, harris_corners, block_size, aperture_size, harris_free_param);
+  cornerHarris(
+      this->img_gray,
+      harris_corners,
+      block_size,
+      aperture_size,
+      harris_free_param);
   Point corner_points[max_corner_points];
   double corner_vals[max_corner_points];
   int num_indices = 0;
@@ -218,7 +260,9 @@ vector<Point> PieceParser::getEdges(
 
   for(i = 0; i < piece_contour.size(); ++i)
   {
-    const double harris_val_curr = harris_corners.at<double>(piece_contour[i].x, piece_contour[i].y);
+    const double harris_val_curr = harris_corners.at<double>(
+        piece_contour[i].x,
+        piece_contour[i].y);
 
     for(j = 0; j < max_corner_points; ++j)
     {
@@ -247,7 +291,6 @@ vector<Point> PieceParser::getEdges(
   }
 
   ROS_INFO_STREAM("Converting to vector form...");
-
   vector<Point> corner_points_vec;
 
   for(i = 0; i < max_corner_points; ++i)
@@ -268,11 +311,20 @@ vector< vector<Point> > PieceParser::findPieces(
   int i;
   vector< vector<Point> > piece_contours;
   vector< vector<Point> > piece_candidates;
-  findContours(this->img_bin, piece_candidates, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+  findContours(
+      this->img_bin,
+      piece_candidates,
+      CV_RETR_EXTERNAL,
+      CV_CHAIN_APPROX_NONE);
 
   for(i = 0; i < piece_candidates.size(); ++i)
   {
-    if(this->checkPiece(piece_candidates[i], area_threshold, num_pixel_threshold, edge_distance_threshold))
+    if(
+        this->checkPiece(
+          piece_candidates[i],
+          area_threshold,
+          num_pixel_threshold,
+          edge_distance_threshold))
     {
       piece_contours.push_back(piece_candidates[i]);
     }
@@ -287,13 +339,21 @@ vector< vector<Point> > PieceParser::findPieces(
 
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 {
+  int central_index;
   int i;
   int j;
+  double resize_factor = 0.6;
 
   // Binarize the image with preset thresholds.
   // TODO: tweak the thresholds if need be.
   ROS_INFO("Binarizing image...");
-  Mat img_raw = cv_bridge::toCvShare(msg, "bgr8")->image;
+  Mat img_raw;
+  resize(
+      cv_bridge::toCvShare(msg, "bgr8")->image,
+      img_raw,
+      Size(),
+      resize_factor,
+      resize_factor);
   this->binarizeImage(img_raw, 5, 105, 3);
 
   // Obtain the connected components and their centroids.
@@ -301,35 +361,65 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
   vector< vector<Point> > piece_contours = this->findPieces(100000, 100, 20);
   ROS_INFO("Finding centroids of pieces in image...");
   vector<Point2f> centroids(piece_contours.size());
+  Point img_center(img_raw.cols / 2, img_raw.rows / 2);
+  double min_dist_center = 1e12;
+  double dist_center;
 
   for(i = 0; i < piece_contours.size(); ++i)
   {
     Moments mu = moments(piece_contours[i], false);
     centroids[i] = Point2f(mu.m10 / mu.m00, mu.m01 / mu.m00);
-    drawContours(img_raw, piece_contours, i, colours[0], 2); // Thickness = 2
-    circle(img_raw, centroids[i], 16, colours[0], -1, 8, 0);
-  }
+    dist_center =
+      sqrt(
+          ((centroids[i].x - img_center.x) * (centroids[i].x - img_center.x))
+          + ((centroids[i].y - img_center.y) * (centroids[i].y - img_center.y)));
 
-  // TODO: tweak edge classification parameters if need be.
-  ROS_INFO("Finding Harris corners...");
-
-  for(i = 0; i < piece_contours.size(); ++i)
-  {
-    vector<Point> harris_corners = getEdges(piece_contours[i], 5, 5, 0.04);
-    ROS_INFO("Displaying Harris corners...");
-
-    for(j = 0; j < harris_corners.size(); ++j)
+    if(dist_center < min_dist_center)
     {
-      circle(img_raw, harris_corners[j], 16, colours[1], -1, 8, 0);
+      min_dist_center = dist_center;
+      central_index = i;
+    }
+    else
+    {
+      // No operation
     }
   }
 
-  namedWindow("display_window", WINDOW_AUTOSIZE);
-  imshow("display_window", img_raw);
-  waitKey(1);
+  //drawContours(img_raw, piece_contours, central_index, colours[0], 2); // Thickness = 2
+  //circle(img_raw, centroids[central_index], 16, colours[0], -1, 8, 0);
+  // TODO: tweak edge classification parameters if need be.
+  ROS_INFO("Finding Harris corners...");
+
+  vector<Point> harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
+  //ROS_INFO("Displaying Harris corners...");
+
+  //for(i = 0; i < harris_corners.size(); ++i)
+  //{
+  //circle(img_raw, harris_corners[i], 16, colours[1], -1, 8, 0);
+  //}
+
+  jps_puzzle_piece::ImageWithContour image_msg;
+  image_msg.header.stamp = ros::Time::now();
+  cv_bridge::CvImage(image_msg.header, "bgr8", img_raw).toImageMsg(
+      image_msg.image);
+
+  for(i = 0; i < piece_contours[central_index].size(); ++i)
+  {
+    geometry_msgs::Point pt_temp;
+    pt_temp.x = (double) piece_contours[central_index][i].x;
+    pt_temp.y = (double) piece_contours[central_index][i].y;
+    pt_temp.z = 0.0;
+    image_msg.contour.push_back(pt_temp);
+  }
+
+  this->image_pub.publish(image_msg);
 }
 
-void PieceParser::binarizeImage(Mat img_input, int median_blur_size, int bin_threshold, int blur_kernel_size)
+void PieceParser::binarizeImage(
+    Mat img_input,
+    int median_blur_size,
+    int bin_threshold,
+    int blur_kernel_size)
 {
   Mat img_blur;
   Mat img_thresh;
@@ -354,8 +444,10 @@ void PieceParser::binarizeImage(Mat img_input, int median_blur_size, int bin_thr
 
 int main(int argc, char **argv)
 {
-  colours.push_back(Scalar(int(0.741 * 256), int(0.447 * 256), int(0.000 * 256)));
-  colours.push_back(Scalar(int(0.098 * 256), int(0.325 * 256), int(0.850 * 256)));
+  colours.push_back(
+      Scalar(int(0.741 * 256), int(0.447 * 256), int(0.000 * 256)));
+  colours.push_back(
+      Scalar(int(0.098 * 256), int(0.325 * 256), int(0.850 * 256)));
   ros::init(argc, argv, "piece_parser_node");
   ros::NodeHandle nh;
   PieceParser p(nh);
