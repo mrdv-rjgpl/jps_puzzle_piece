@@ -1,6 +1,7 @@
 <launch>
+	<remap from="/piece_parser/input_image" to="/camera/image" />
 	<include file="$(find jps_puzzle_piece)/launch/piece_parser.launch" />
-	<param name="/piece_parser/input_image_topic" value="/camera/image" type="string" />
-	<param name="/piece_parser/img_file_name" value="/media/mardava/DATA/Academics/530_707_robot_sys_prog/530_707_independent_project/dat/20190407/pic10.png" type="string" />
-	<node pkg="jps_puzzle_piece" type="test_piece_image_supplier" name="test_piece_image_supplier_node" />
+
+	<node pkg="jps_puzzle_piece" type="test_piece_image_supplier" name="test_piece_image_supplier_node" output="screen" />
+	<param name="img_file_name" value="/media/mardava/DATA/Academics/530_707_robot_sys_prog/530_707_independent_project/dat/20190407/pic10.png" type="string" />
 </launch>

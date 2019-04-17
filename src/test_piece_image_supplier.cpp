@@ -40,11 +40,11 @@ void TestPieceImageSupplier::timerCallback(const ros::TimerEvent& event)
   string img_file_name;
   ROS_INFO("Fetching image file name...");
 
-  if(this->nh.getParam("/piece_parser/img_file_name", img_file_name))
+  if(this->nh.getParam("img_file_name", img_file_name))
   {
     Mat img = imread(img_file_name, CV_LOAD_IMAGE_COLOR);
     sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img).toImageMsg();
-    ROS_INFO("Publishing image_transport message...");
+    ROS_INFO("Publishing image_transport message on /camera/image...");
     this->image_pub.publish(msg);
   }
   else

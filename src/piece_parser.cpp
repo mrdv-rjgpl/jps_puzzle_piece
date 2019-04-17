@@ -203,25 +203,20 @@ bool PieceParser::checkPiece(
 PieceParser::PieceParser(ros::NodeHandle& nh)
 {
   string input_image_topic;
+  string output_image_topic;
   ROS_INFO("Initializing piece parser...");
   this->nh = ros::NodeHandle(nh);
   this->img_transport = new image_transport::ImageTransport(this->nh);
+
   this->image_pub = this->nh.advertise<jps_puzzle_piece::ImageWithContour>(
-      "/piece_parser/image_piece",
+      "output_image",
       1000);
 
-  if(this->nh.getParam("/piece_parser/input_image_topic", input_image_topic))
-  {
-    this->image_sub = this->img_transport->subscribe(
-        input_image_topic,
-        1,
-        &PieceParser::imageSubscriberCallback,
-        this);
-  }
-  else
-  {
-    ROS_ERROR("Could not obtain input image topic from parameter list.");
-  }
+  this->image_sub = this->img_transport->subscribe(
+      "input_image",
+      1,
+      &PieceParser::imageSubscriberCallback,
+      this);
 }
 
 vector<Point> PieceParser::getEdges(
@@ -268,7 +263,7 @@ vector<Point> PieceParser::getEdges(
     {
       if(harris_val_curr > corner_vals[j])
       {
-        ROS_INFO_STREAM(++num_indices << " peak points found.");
+        ++num_indices;
 
         for(k = max_corner_points - 1; k > j; --k)
         {
@@ -288,8 +283,10 @@ vector<Point> PieceParser::getEdges(
         // No operation
       }
     }
+
   }
 
+  ROS_INFO_STREAM(num_indices << " peak points found.");
   ROS_INFO_STREAM("Converting to vector form...");
   vector<Point> corner_points_vec;
 

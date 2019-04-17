@@ -1,3 +1,3 @@
 <launch>
-	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" output="screen" />
+	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" ns="piece_parser" output="screen" />
 </launch>
