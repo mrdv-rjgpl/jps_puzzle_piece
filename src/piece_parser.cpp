@@ -386,7 +386,6 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
   //circle(img_raw, centroids[central_index], 16, colours[0], -1, 8, 0);
   // TODO: tweak edge classification parameters if need be.
   ROS_INFO("Finding Harris corners...");
-
   vector<Point> harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
   //ROS_INFO("Displaying Harris corners...");
 
@@ -406,7 +405,7 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
     pt_temp.x = (double) piece_contours[central_index][i].x;
     pt_temp.y = (double) piece_contours[central_index][i].y;
     pt_temp.z = 0.0;
-    image_msg.contour.push_back(pt_temp);
+    image_msg.contour_px.push_back(pt_temp);
   }
 
   this->image_pub.publish(image_msg);

@@ -13,7 +13,6 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   roscpp
   rospy
-  rtabmap_ros
   sensor_msgs
   std_msgs
   tf
@@ -77,7 +76,7 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
 #  geometry_msgs
-  rtabmap_ros  sensor_msgs  std_msgs
+  sensor_msgs  std_msgs
 )
 
 ################################################
@@ -112,7 +111,7 @@ generate_messages(
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES jps_puzzle_piece
-  CATKIN_DEPENDS cv_bridge geometry_msgs image_transport roscpp rospy rtabmap_ros sensor_msgs std_msgs tf message_runtime
+  CATKIN_DEPENDS cv_bridge geometry_msgs image_transport roscpp rospy sensor_msgs std_msgs tf message_runtime
   DEPENDS OpenCV
 #  CFG_EXTRAS cv_bridge-extras.cmake
 #  DEPENDS system_lib
