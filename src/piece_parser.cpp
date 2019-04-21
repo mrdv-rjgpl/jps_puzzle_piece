@@ -382,22 +382,16 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
     }
   }
 
-  //drawContours(img_raw, piece_contours, central_index, colours[0], 2); // Thickness = 2
-  //circle(img_raw, centroids[central_index], 16, colours[0], -1, 8, 0);
   // TODO: tweak edge classification parameters if need be.
   ROS_INFO("Finding Harris corners...");
   vector<Point> harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
-  //ROS_INFO("Displaying Harris corners...");
-
-  //for(i = 0; i < harris_corners.size(); ++i)
-  //{
-  //circle(img_raw, harris_corners[i], 16, colours[1], -1, 8, 0);
-  //}
 
   jps_puzzle_piece::ImageWithContour image_msg;
   image_msg.header.stamp = ros::Time::now();
   cv_bridge::CvImage(image_msg.header, "bgr8", img_raw).toImageMsg(
       image_msg.image);
+  image_msg.centroid_px.x = centroids[central_index].x;
+  image_msg.centroid_px.y = centroids[central_index].y;
 
   for(i = 0; i < piece_contours[central_index].size(); ++i)
   {
