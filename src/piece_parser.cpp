@@ -336,15 +336,20 @@ vector< vector<Point> > PieceParser::findPieces(
 
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 {
-  int central_index;
+  int central_index = -1;
   int i;
   int j;
-  double resize_factor = 0.6;
+  double resize_factor = 0.8;
+  double min_dist_center = 1e12;
+  double dist_center;
+  Mat img_raw;
+  vector< vector<Point> > piece_contours;
+  vector<Point> harris_corners;
+  jps_puzzle_piece::ImageWithContour image_msg;
 
   // Binarize the image with preset thresholds.
   // TODO: tweak the thresholds if need be.
   ROS_INFO("Binarizing image...");
-  Mat img_raw;
   resize(
       cv_bridge::toCvShare(msg, "bgr8")->image,
       img_raw,
@@ -355,12 +360,11 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 
   // Obtain the connected components and their centroids.
   ROS_INFO("Finding puzzle pieces in image...");
-  vector< vector<Point> > piece_contours = this->findPieces(100000, 100, 20);
+  piece_contours = this->findPieces(100000, 100, 20);
+  ROS_INFO_STREAM(piece_contours.size() << " piece contours found.");
   ROS_INFO("Finding centroids of pieces in image...");
   vector<Point2f> centroids(piece_contours.size());
   Point img_center(img_raw.cols / 2, img_raw.rows / 2);
-  double min_dist_center = 1e12;
-  double dist_center;
 
   for(i = 0; i < piece_contours.size(); ++i)
   {
@@ -383,26 +387,32 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
   }
 
   // TODO: tweak edge classification parameters if need be.
-  ROS_INFO("Finding Harris corners...");
-  vector<Point> harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
-
-  jps_puzzle_piece::ImageWithContour image_msg;
-  image_msg.header.stamp = ros::Time::now();
-  cv_bridge::CvImage(image_msg.header, "bgr8", img_raw).toImageMsg(
-      image_msg.image);
-  image_msg.centroid_px.x = centroids[central_index].x;
-  image_msg.centroid_px.y = centroids[central_index].y;
-
-  for(i = 0; i < piece_contours[central_index].size(); ++i)
+  if(central_index >= 0)
   {
-    geometry_msgs::Point pt_temp;
-    pt_temp.x = (double) piece_contours[central_index][i].x;
-    pt_temp.y = (double) piece_contours[central_index][i].y;
-    pt_temp.z = 0.0;
-    image_msg.contour_px.push_back(pt_temp);
-  }
+    ROS_INFO("Finding Harris corners...");
+    harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
 
-  this->image_pub.publish(image_msg);
+    image_msg.header.stamp = ros::Time::now();
+    cv_bridge::CvImage(image_msg.header, "bgr8", img_raw).toImageMsg(
+        image_msg.image);
+    image_msg.centroid_px.x = centroids[central_index].x;
+    image_msg.centroid_px.y = centroids[central_index].y;
+
+    for(i = 0; i < piece_contours[central_index].size(); ++i)
+    {
+      geometry_msgs::Point pt_temp;
+      pt_temp.x = (double) piece_contours[central_index][i].x;
+      pt_temp.y = (double) piece_contours[central_index][i].y;
+      pt_temp.z = 0.0;
+      image_msg.contour_px.push_back(pt_temp);
+    }
+
+    this->image_pub.publish(image_msg);
+  }
+  else
+  {
+    ROS_INFO("No piece found.");
+  }
 }
 
 void PieceParser::binarizeImage(
