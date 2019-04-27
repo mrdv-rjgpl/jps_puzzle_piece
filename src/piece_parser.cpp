@@ -8,6 +8,7 @@
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
 #include <geometry_msgs/Point.h>
+#include <dynamic_reconfigure/server.h>
 
 #include <string>
 
@@ -15,7 +16,9 @@
 #include <functional>
 
 #include <exception>
+
 #include "jps_puzzle_piece/ImageWithContour.h"
+#include "jps_puzzle_piece/PieceParserConfig.h"
 
 using namespace cv;
 using namespace std;
@@ -49,7 +52,29 @@ class PieceParser
      * \brief Image publisher object
      */
     ros::Publisher image_pub;
+    /*
+     * \brief Visualization publisher object
+     */
+    image_transport::Publisher vis_pub;
+    int bin_threshold;
+    dynamic_reconfigure::Server<jps_puzzle_piece::PieceParserConfig> reconf_server;
+    dynamic_reconfigure::Server<jps_puzzle_piece::PieceParserConfig>::CallbackType reconf_callback_type;
 
+    /*
+     * \brief Binarize the image
+     *
+     * \param[in] img_input The input image to be binarized
+     * \param[in] median_blur_size The size to be used for median blurring
+     * \param[in] bin_threshold The threshold for image binarization
+     * \param[in] blur_kernel_size The kernel size to be used for blurring
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
+    void binarizeImage(
+        Mat img_input,
+        int median_blur_size,
+        int bin_threshold,
+        int blur_kernel_size);
     /*
      * \brief Check the current contour to determine if it is a valid image of
      * a piece
@@ -77,6 +102,17 @@ class PieceParser
         int area_threshold,
         int num_pixel_threshold,
         int edge_distance_threshold);
+    /*
+     * \brief Callback function for dynamic reconfiguration
+     *
+     * \param[in] config The updated configuration to use
+     * \param[in] level The mask indicating which parameters were changed
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
+    void dynamicReconfigureCallback(
+        jps_puzzle_piece::PieceParserConfig& config,
+        uint32_t level);
 
   public:
     /*
@@ -131,21 +167,6 @@ class PieceParser
      * \author Mardava Gubbi <mgubbi1@jhu.edu>
      */
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
-    /*
-     * \brief Binarize the image
-     *
-     * \param[in] img_input The input image to be binarized
-     * \param[in] median_blur_size The size to be used for median blurring
-     * \param[in] bin_threshold The threshold for image binarization
-     * \param[in] blur_kernel_size The kernel size to be used for blurring
-     *
-     * \author Mardava Gubbi <mgubbi1@jhu.edu>
-     */
-    void binarizeImage(
-        Mat img_input,
-        int median_blur_size,
-        int bin_threshold,
-        int blur_kernel_size);
 };
 
 bool PieceParser::checkPiece(
@@ -207,16 +228,20 @@ PieceParser::PieceParser(ros::NodeHandle& nh)
   ROS_INFO("Initializing piece parser...");
   this->nh = ros::NodeHandle(nh);
   this->img_transport = new image_transport::ImageTransport(this->nh);
+  this->bin_threshold = 105;
 
   this->image_pub = this->nh.advertise<jps_puzzle_piece::ImageWithContour>(
       "output_image",
       1000);
+  this->vis_pub = this->img_transport->advertise("vis_image", 1000);
 
   this->image_sub = this->img_transport->subscribe(
       "input_image",
       1,
       &PieceParser::imageSubscriberCallback,
       this);
+  this->reconf_callback_type = boost::bind(&PieceParser::dynamicReconfigureCallback, this, _1, _2);
+  this->reconf_server.setCallback(this->reconf_callback_type);
 }
 
 vector<Point> PieceParser::getEdges(
@@ -334,34 +359,53 @@ vector< vector<Point> > PieceParser::findPieces(
   return piece_contours;
 }
 
+void PieceParser::dynamicReconfigureCallback(
+    jps_puzzle_piece::PieceParserConfig& config,
+    uint32_t level)
+{
+  this->bin_threshold = config.bin_threshold;
+}
 void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
 {
   int central_index = -1;
   int i;
   int j;
-  double resize_factor = 0.8;
+  double resize_factor = 0.4;
   double min_dist_center = 1e12;
   double dist_center;
   Mat img_raw;
+  Mat img_vis;
   vector< vector<Point> > piece_contours;
   vector<Point> harris_corners;
   jps_puzzle_piece::ImageWithContour image_msg;
+  sensor_msgs::ImagePtr vis_msg;
 
   // Binarize the image with preset thresholds.
   // TODO: tweak the thresholds if need be.
-  ROS_INFO("Binarizing image...");
   resize(
       cv_bridge::toCvShare(msg, "bgr8")->image,
       img_raw,
       Size(),
       resize_factor,
       resize_factor);
-  this->binarizeImage(img_raw, 5, 105, 3);
+
+  ROS_INFO_STREAM("Binarizing image with threshold " << this->bin_threshold << "...");
+  this->binarizeImage(img_raw, 5, this->bin_threshold, 3);
 
   // Obtain the connected components and their centroids.
   ROS_INFO("Finding puzzle pieces in image...");
   piece_contours = this->findPieces(100000, 100, 20);
   ROS_INFO_STREAM(piece_contours.size() << " piece contours found.");
+  cvtColor(this->img_bin, img_vis, CV_GRAY2BGR);
+
+  for(i = 0; i < piece_contours.size(); ++i)
+  {
+    drawContours(img_vis, piece_contours, i, colours[0], 2);
+  }
+
+  vis_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img_vis).toImageMsg();
+  this->vis_pub.publish(vis_msg);
+
   ROS_INFO("Finding centroids of pieces in image...");
   vector<Point2f> centroids(piece_contours.size());
   Point img_center(img_raw.cols / 2, img_raw.rows / 2);

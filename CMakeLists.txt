@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf
   message_generation
+  dynamic_reconfigure
 )
 
 ## System dependencies are found with CMake's conventions
@@ -95,10 +96,11 @@ generate_messages(
 ##     and list every .cfg file to be processed
 
 ## Generate dynamic reconfigure parameters in the 'cfg' folder
-# generate_dynamic_reconfigure_options(
+generate_dynamic_reconfigure_options(
+	cfg/PieceParser.cfg
 #   cfg/DynReconf1.cfg
 #   cfg/DynReconf2.cfg
-# )
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -209,6 +211,7 @@ include_directories(
 # catkin_add_nosetests(test)
 
 add_executable(piece_parser src/piece_parser.cpp)
+add_dependencies(piece_parser ${PROJECT_NAME}_gencfg)
 target_link_libraries(piece_parser ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_executable(test_piece_image_supplier src/test_piece_image_supplier.cpp)
 target_link_libraries(test_piece_image_supplier ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
