@@ -45,6 +45,10 @@ class PieceParser
      */
     Mat img_gray;
     /*
+     * \brief SURF detector object
+     */
+    Ptr<SURF> surf_detector;
+    /*
      * \brief ROS node handler
      */
     ros::NodeHandle nh;
@@ -56,11 +60,29 @@ class PieceParser
      * \brief Visualization publisher object
      */
     image_transport::Publisher vis_pub;
+    /*
+     * \brief Image binarizing threshold
+     */
     int bin_threshold;
+    /*
+     * \brief Minimum area for contour to be labeled as a piece
+     */
     int area_threshold;
+    /*
+     * \brief Number of points to skip to form angle whose cosine is to be found
+     */
     int cos_point_skip;
+    /*
+     * \brief Number of corners to be detected by algorithm
+     */
     int num_corners;
+    /*
+     * \brief Dynamic reconfigure server
+     */
     dynamic_reconfigure::Server<jps_puzzle_piece::PieceParserConfig> reconf_server;
+    /*
+     * \brief Dynamic reconfigure callback type
+     */
     dynamic_reconfigure::Server<jps_puzzle_piece::PieceParserConfig>::CallbackType reconf_callback_type;
 
     /*
@@ -116,23 +138,6 @@ class PieceParser
         jps_puzzle_piece::PieceParserConfig& config,
         uint32_t level);
     /*
-     * \brief Get the most likely corner vertices of the given piece
-     *
-     * \param[in] piece_contour A vector of points forming the piece contour
-     * \param[in] num_corners The number of corners to be returned
-     */
-    vector<int> getCorners(vector<Point> piece_contour);
-
-  public:
-    /*
-     * \brief Construct an object of the type PieceParser
-     *
-     * \param[in] nh The ROS node handler
-     *
-     * \author Mardava Gubbi <mgubbi1@jhu.edu>
-     */
-    PieceParser(ros::NodeHandle& nh);
-    /*
      * \brief Find all puzzle pieces in the given image
      *
      * \param[in] area_threshold The minimum area for a puzzle piece
@@ -146,9 +151,16 @@ class PieceParser
      *
      * \author Mardava Gubbi <mgubbi1@jhu.edu>
      */
-    vector< vector< Point> > findPieces(
+    vector< vector<Point> > findPieces(
         int num_pixel_threshold,
         int edge_distance_threshold);
+    /*
+     * \brief Get the most likely corner vertices of the given piece
+     *
+     * \param[in] piece_contour A vector of points forming the piece contour
+     * \param[in] num_corners The number of corners to be returned
+     */
+    vector<int> getCorners(vector<Point> piece_contour);
     /*
      * \brief Get the edges of the puzzle piece
      *
@@ -168,6 +180,20 @@ class PieceParser
         int aperture_size,
         double harris_free_param);
     /*
+     * \brief Extract the SURF features of the puzzle piece
+     */
+    void extractSurf(vector<Point> piece_contour);
+
+  public:
+    /*
+     * \brief Construct an object of the type PieceParser
+     *
+     * \param[in] nh The ROS node handler
+     *
+     * \author Mardava Gubbi <mgubbi1@jhu.edu>
+     */
+    PieceParser(ros::NodeHandle& nh);
+    /*
      * \brief Callback function for the image subscriber object
      *
      * \param[in] msg The message containing the latest image from the camera
@@ -177,7 +203,7 @@ class PieceParser
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
 };
 
-PieceParser::PieceParser(ros::NodeHandle& nh)
+PieceParser::PieceParser(ros::NodeHandle& nh, int min_hessian)
 {
   string input_image_topic;
   string output_image_topic;
@@ -188,16 +214,23 @@ PieceParser::PieceParser(ros::NodeHandle& nh)
   this->area_threshold = 100000;
   this->num_corners = 4;
 
+  // Setup publisher objects
   this->image_pub = this->nh.advertise<jps_puzzle_piece::ImageWithContour>(
       "output_image",
       1000);
   this->vis_pub = this->img_transport->advertise("vis_image", 1000);
 
+  // Setup subscriber object
   this->image_sub = this->img_transport->subscribe(
       "input_image",
       1,
       &PieceParser::imageSubscriberCallback,
       this);
+
+  // Setup SURF related objects
+  this->surf_detector = SURF::create(min_hessian);
+
+  // Setup dynamic reconfiguration objects
   this->reconf_callback_type = boost::bind(&PieceParser::dynamicReconfigureCallback, this, _1, _2);
   this->reconf_server.setCallback(this->reconf_callback_type);
 }
@@ -242,7 +275,12 @@ bool PieceParser::checkPiece(
   // Ensure that the area is above a certain threshold.
   if(contour_area < this->area_threshold)
   {
-    ROS_INFO_STREAM("Contour area error: " << contour_area << " < area_threshold[=" << this->area_threshold << "]");
+    ROS_INFO_STREAM(
+        "Contour area error: "
+        << contour_area
+        << " < area_threshold[="
+        << this->area_threshold
+        << "]");
     piece_validity = false;
   }
   else
@@ -504,7 +542,8 @@ vector<Point> PieceParser::getEdges(
   return corner_points_vec;
 }
 
-void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
+void PieceParser::imageSubscriberCallback(
+    const sensor_msgs::ImageConstPtr& msg)
 {
   double corner_angles[6];
   double dist_center;
@@ -533,7 +572,8 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
       resize_factor,
       resize_factor);
 
-  ROS_INFO_STREAM("Binarizing image with threshold " << this->bin_threshold << "...");
+  ROS_INFO_STREAM(
+      "Binarizing image with threshold " << this->bin_threshold << "...");
   this->binarizeImage(img_raw, 5, this->bin_threshold, 3);
 
   // Obtain the connected components and their centroids.
@@ -587,6 +627,7 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
         -1,
         8,
         0);
+
     //    ROS_INFO("Finding Harris corners...");
     //    harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
     //
@@ -618,6 +659,9 @@ void PieceParser::imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg)
           8,
           0);
     }
+
+    // Extract SURF features
+    this->surf_detector->detectAndCompute(img_raw, noArray(), kp_img, desc_img);
 
     // Publish the images and visualization.
     image_msg.header.stamp = ros::Time::now();
