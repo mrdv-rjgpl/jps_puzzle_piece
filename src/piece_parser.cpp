@@ -1,12 +1,16 @@
+#include <opencv2/calib3d/calib3d.hpp>
 #include <opencv2/core/core.hpp>
+#include <opencv2/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgcodecs/imgcodecs.hpp>
+#include <opencv2/xfeatures2d.hpp>
 
 #include <ros/ros.h>
 
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
 #include <sensor_msgs/image_encodings.h>
+
 #include <geometry_msgs/Point.h>
 #include <dynamic_reconfigure/server.h>
 
@@ -21,6 +25,7 @@
 #include "jps_puzzle_piece/PieceParserConfig.h"
 
 using namespace cv;
+using namespace cv::xfeatures2d;
 using namespace std;
 
 vector<Scalar> colours;
@@ -36,6 +41,10 @@ class PieceParser
      * \brief Image subscriber object
      */
     image_transport::Subscriber image_sub;
+    /*
+     * \brief Raw resized image
+     */
+    Mat img_raw;
     /*
      * \brief Binarized image
      */
@@ -155,12 +164,20 @@ class PieceParser
         int num_pixel_threshold,
         int edge_distance_threshold);
     /*
+     * \brief Extract the SURF features of the puzzle piece
+     */
+    void extractSurf(
+        vector<Point2f> piece_contour_f,
+        vector<KeyPoint> &kp_img,
+        Mat &desc_img);
+
+    /*
      * \brief Get the most likely corner vertices of the given piece
      *
      * \param[in] piece_contour A vector of points forming the piece contour
      * \param[in] num_corners The number of corners to be returned
      */
-    vector<int> getCorners(vector<Point> piece_contour);
+    /*vector<int> getCorners(vector<Point> piece_contour); */
     /*
      * \brief Get the edges of the puzzle piece
      *
@@ -174,25 +191,23 @@ class PieceParser
      *
      * \return The edges of the piece
      */
-    vector<Point> getEdges(
+    /*vector<Point> getEdges(
         vector<Point> piece_contour,
         int block_size,
         int aperture_size,
-        double harris_free_param);
-    /*
-     * \brief Extract the SURF features of the puzzle piece
-     */
-    void extractSurf(vector<Point> piece_contour);
+        double harris_free_param); */
 
   public:
     /*
      * \brief Construct an object of the type PieceParser
      *
      * \param[in] nh The ROS node handler
+     * \param[in] min_hessian The minimum Hessian value to be supplied to
+     * the SURF feature detection
      *
      * \author Mardava Gubbi <mgubbi1@jhu.edu>
      */
-    PieceParser(ros::NodeHandle& nh);
+    PieceParser(ros::NodeHandle& nh, int min_hessian);
     /*
      * \brief Callback function for the image subscriber object
      *
@@ -203,6 +218,9 @@ class PieceParser
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
 };
 
+/*
+ * \brief Construct an object of the type PieceParser
+ */
 PieceParser::PieceParser(ros::NodeHandle& nh, int min_hessian)
 {
   string input_image_topic;
@@ -231,10 +249,17 @@ PieceParser::PieceParser(ros::NodeHandle& nh, int min_hessian)
   this->surf_detector = SURF::create(min_hessian);
 
   // Setup dynamic reconfiguration objects
-  this->reconf_callback_type = boost::bind(&PieceParser::dynamicReconfigureCallback, this, _1, _2);
+  this->reconf_callback_type = boost::bind(
+      &PieceParser::dynamicReconfigureCallback,
+      this,
+      _1,
+      _2);
   this->reconf_server.setCallback(this->reconf_callback_type);
 }
 
+/*
+ * \brief Binarize the image
+ */
 void PieceParser::binarizeImage(
     Mat img_input,
     int median_blur_size,
@@ -262,6 +287,10 @@ void PieceParser::binarizeImage(
   blur(img_thresh, this->img_bin, Size(blur_kernel_size, blur_kernel_size));
 }
 
+/*
+ * \brief Check the current contour to determine if it is a valid image of
+ * a piece
+ */
 bool PieceParser::checkPiece(
     vector<Point> piece_candidate,
     int num_pixel_threshold,
@@ -321,6 +350,9 @@ bool PieceParser::checkPiece(
   return piece_validity;
 }
 
+/*
+ * \brief Callback function for dynamic reconfiguration
+ */
 void PieceParser::dynamicReconfigureCallback(
     jps_puzzle_piece::PieceParserConfig& config,
     uint32_t level)
@@ -330,6 +362,9 @@ void PieceParser::dynamicReconfigureCallback(
   this->cos_point_skip = config.cos_point_skip;
 }
 
+/*
+ * \brief Find all puzzle pieces in the given image
+ */
 vector< vector<Point> > PieceParser::findPieces(
     int num_pixel_threshold,
     int edge_distance_threshold)
@@ -346,8 +381,7 @@ vector< vector<Point> > PieceParser::findPieces(
 
   for(i = 0; i < piece_candidates.size(); ++i)
   {
-    if(
-        this->checkPiece(
+    if(this->checkPiece(
           piece_candidates[i],
           num_pixel_threshold,
           edge_distance_threshold))
@@ -363,218 +397,82 @@ vector< vector<Point> > PieceParser::findPieces(
   return piece_contours;
 }
 
-vector<int> PieceParser::getCorners(vector<Point> piece_contour)
+/*
+ * \brief Extract the SURF features of the puzzle piece
+ */
+void PieceParser::extractSurf(
+    vector<Point2f> piece_contour_f,
+    vector<KeyPoint> &kp_img,
+    Mat &desc_img)
 {
-  double x_diff;
-  double y_diff;
-  double a_square;
-  double cos_theta;
-  // Distance between i and i + this->cos_point_skip
-  double dist[piece_contour.size()];
-  double dist_square[piece_contour.size()];
-  // Minimum cos indices and values.
-  double min_cos_theta[this->num_corners];
-  vector<int> corner_indices(this->num_corners);
-  int i_prev;
-  int i_next;
+  Mat desc_img_raw;
   int i;
   int j;
-  int k;
-  int num_min_points_found = 0;
+  vector<KeyPoint> kp_img_raw;
+  vector<int> kp_indices;
 
-  for(i = 0; i < this->num_corners; ++i)
+  this->surf_detector->detectAndCompute(
+      this->img_raw,
+      noArray(),
+      kp_img_raw,
+      desc_img_raw);
+
+  for(i = 0; i < kp_img_raw.size(); ++i)
   {
-    min_cos_theta[i] = 2.0;
-    corner_indices[i] = -1;
-  }
-
-  for(i = 0; i < piece_contour.size(); ++i)
-  {
-    // Form a triangle ABC with vertices i, i_next, and i_prev respectively.
-    i_prev =
-      (i + piece_contour.size() - this->cos_point_skip)
-      % piece_contour.size();
-    i_next = (i + this->cos_point_skip) % piece_contour.size();
-
-    // Compute the side A and its square.
-    x_diff = piece_contour[i_next].x - piece_contour[i_prev].x;
-    y_diff = piece_contour[i_next].y - piece_contour[i_prev].y;
-    a_square = ((x_diff * x_diff) + (y_diff - y_diff));
-
-    if(i_prev > i)
+    if(pointPolygonTest(piece_contour_f, kp_img_raw[i].pt, false) > 0)
     {
-      // Compute the size B and its square.
-      x_diff = piece_contour[i].x - piece_contour[i_prev].x;
-      y_diff = piece_contour[i].y - piece_contour[i_prev].y;
-      dist_square[i_prev] = (x_diff * x_diff) + (y_diff - y_diff);
-      dist[i_prev] = sqrt(dist_square[i_prev]);
+      kp_img.push_back(kp_img_raw[i]);
+      kp_indices.push_back(i);
     }
     else
     {
       // No operation
     }
-
-    if(i < i_next)
-    {
-      // Compute the side C and its square.
-      x_diff = piece_contour[i_next].x - piece_contour[i].x;
-      y_diff = piece_contour[i_next].y - piece_contour[i].y;
-      dist_square[i] = sqrt((x_diff * x_diff) + (y_diff - y_diff));
-      dist[i] = sqrt(dist_square[i]);
-    }
-    else
-    {
-      // No operation
-    }
-
-    // Compute cos theta and compare with current minimum.
-    cos_theta =
-      abs((dist_square[i_prev] + dist_square[i_next] - a_square)
-          / (2 * dist[i_prev] * dist[i_next]));
-
-    for(j = 0; j < this->num_corners; ++j)
-    {
-      if(cos_theta >= min_cos_theta[j])
-      {
-        // Insert both the cos value and the index into the list and break.
-        for(k = 0; k < j; ++k)
-        {
-          min_cos_theta[k] = min_cos_theta[k + 1];
-          corner_indices[k] = corner_indices[k + 1];
-        }
-
-        min_cos_theta[j] = cos_theta;
-        corner_indices[j] = i;
-        ++num_min_points_found;
-
-        break;
-      }
-      else
-      {
-        // No operation
-      }
-    }
   }
 
-  ROS_INFO_STREAM(num_min_points_found << " corner points found and pruned to " << this->num_corners << ".");
+  desc_img = Mat(kp_img.size(), desc_img_raw.cols, desc_img_raw.type());
 
-  return corner_indices;
+  for(i = 0; i < kp_indices.size(); ++i)
+  {
+    for(j = 0; j < desc_img_raw.cols; ++j)
+    {
+      desc_img.at<float>(i, j) = desc_img_raw.at<float>(kp_indices[i], j);
+    }
+  }
 }
 
-vector<Point> PieceParser::getEdges(
-    vector<Point> piece_contour,
-    int block_size,
-    int aperture_size,
-    double harris_free_param)
-{
-  int i;
-  int j;
-  int k;
-  // Max corner points is twice that required, to contain the piece corners.
-  int max_corner_points = 32;
-  int pixel_dist_threshold = 10;
-
-  ROS_INFO("Initializing Harris corner matrix...");
-  Mat harris_corners = Mat::zeros(this->img_gray.size(), CV_32FC1);
-  ROS_INFO("Fetching Harris corners...");
-  cornerHarris(
-      this->img_gray,
-      harris_corners,
-      block_size,
-      aperture_size,
-      harris_free_param);
-  Point corner_points[max_corner_points];
-  double corner_vals[max_corner_points];
-  int num_indices = 0;
-
-  for(i = 0; i < max_corner_points; ++i)
-  {
-    corner_vals[i] = -1e9;
-    corner_points[i] = Point(0, 0);
-  }
-
-  ROS_INFO("Checking Harris corners for top values...");
-
-  for(i = 0; i < piece_contour.size(); ++i)
-  {
-    const double harris_val_curr = harris_corners.at<double>(
-        piece_contour[i].x,
-        piece_contour[i].y);
-
-    for(j = 0; j < max_corner_points; ++j)
-    {
-      if(harris_val_curr > corner_vals[j])
-      {
-        ++num_indices;
-
-        for(k = max_corner_points - 1; k > j; --k)
-        {
-          corner_vals[k] = corner_vals[k - 1];
-          corner_points[k] = corner_points[k - 1];
-        }
-
-        Point temp_pt = Point(piece_contour[i].x, piece_contour[i].y);
-        corner_vals[j] = harris_val_curr;
-        corner_points[j] = temp_pt;
-        i += pixel_dist_threshold;
-
-        break;
-      }
-      else
-      {
-        // No operation
-      }
-    }
-
-  }
-
-  ROS_INFO_STREAM(num_indices << " peak points found.");
-  ROS_INFO_STREAM("Converting to vector form...");
-  vector<Point> corner_points_vec;
-
-  for(i = 0; i < max_corner_points; ++i)
-  {
-    corner_points_vec.push_back(corner_points[i]);
-  }
-
-  ROS_INFO_STREAM("Maximum Harris corner values successfully obtained.");
-
-  return corner_points_vec;
-}
-
+/*
+ * \brief Callback function for the image subscriber object
+ */
 void PieceParser::imageSubscriberCallback(
     const sensor_msgs::ImageConstPtr& msg)
 {
-  double corner_angles[6];
   double dist_center;
   double min_dist_center = 1e12;
   double resize_factor = 0.8;
+  geometry_msgs::Point pt_temp;
   int central_index = -1;
   int i;
-  int i_prev;
-  int i_next;
-  int j;
-  int k;
   jps_puzzle_piece::ImageWithContour image_msg;
-  Mat img_raw;
+  Mat desc_img;
   Mat img_vis;
   sensor_msgs::ImagePtr vis_msg;
-  vector<Point> harris_corners;
+  vector<KeyPoint> kp_img;
+  vector<Point2f> piece_contour_f;
   vector< vector<Point> > piece_contours;
-  vector<int> corner_indices;
 
-  // Binarize the image with preset thresholds.
-  // TODO: tweak the thresholds if need be.
+  // Resize the image by a factor of 2 for easier processing.
   resize(
       cv_bridge::toCvShare(msg, "bgr8")->image,
-      img_raw,
+      this->img_raw,
       Size(),
       resize_factor,
       resize_factor);
 
+  // Binarize the image with reconfigurable thresholds.
   ROS_INFO_STREAM(
       "Binarizing image with threshold " << this->bin_threshold << "...");
-  this->binarizeImage(img_raw, 5, this->bin_threshold, 3);
+  this->binarizeImage(this->img_raw, 5, this->bin_threshold, 3);
 
   // Obtain the connected components and their centroids.
   ROS_INFO("Finding puzzle pieces in image...");
@@ -592,12 +490,13 @@ void PieceParser::imageSubscriberCallback(
   // Determine the centroids of the contours.
   ROS_INFO("Finding centroids of pieces in image...");
   vector<Point2f> centroids(piece_contours.size());
-  Point img_center(img_raw.cols / 2, img_raw.rows / 2);
+  Point img_center(this->img_raw.cols / 2, this->img_raw.rows / 2);
 
   for(i = 0; i < piece_contours.size(); ++i)
   {
     Moments mu = moments(piece_contours[i], false);
     centroids[i] = Point2f(mu.m10 / mu.m00, mu.m01 / mu.m00);
+
     // Isolate the contour closest to the center of the image.
     dist_center =
       sqrt(
@@ -628,56 +527,30 @@ void PieceParser::imageSubscriberCallback(
         8,
         0);
 
-    //    ROS_INFO("Finding Harris corners...");
-    //    harris_corners = getEdges(piece_contours[central_index], 5, 5, 0.04);
-    //
-    //    for(i = 0; i < harris_corners.size(); ++i)
-    //    {
-    //      circle(
-    //          img_vis,
-    //          Point2f(harris_corners[i].x, harris_corners[i].y),
-    //          16,
-    //          colours[1],
-    //          -1,
-    //          8,
-    //          0);
-    //    }
-
-    ROS_INFO_STREAM("Fetching " << this->num_corners << " corner pieces...");
-    corner_indices = this->getCorners(piece_contours[central_index]);
-
-    for(i = 0; i < corner_indices.size(); ++i)
-    {
-      circle(
-          img_vis,
-          Point2f(
-            piece_contours[central_index][corner_indices[i]].x,
-            piece_contours[central_index][corner_indices[i]].y),
-          16,
-          colours[1],
-          -1,
-          8,
-          0);
-    }
-
-    // Extract SURF features
-    this->surf_detector->detectAndCompute(img_raw, noArray(), kp_img, desc_img);
-
-    // Publish the images and visualization.
+    // Populate the messages for SURF feature matching and visualization.
     image_msg.header.stamp = ros::Time::now();
-    cv_bridge::CvImage(image_msg.header, "bgr8", img_raw).toImageMsg(
+    cv_bridge::CvImage(image_msg.header, "bgr8", this->img_raw).toImageMsg(
         image_msg.image);
     image_msg.centroid_px.x = centroids[central_index].x;
     image_msg.centroid_px.y = centroids[central_index].y;
 
     for(i = 0; i < piece_contours[central_index].size(); ++i)
     {
-      geometry_msgs::Point pt_temp;
+      piece_contour_f.push_back(Point2f(
+            (double) piece_contours[central_index][i].x,
+            (double) piece_contours[central_index][i].y));
+
       pt_temp.x = (double) piece_contours[central_index][i].x;
       pt_temp.y = (double) piece_contours[central_index][i].y;
       pt_temp.z = 0.0;
       image_msg.contour_px.push_back(pt_temp);
     }
+
+    // Extract SURF features
+    this->extractSurf(piece_contour_f, kp_img, desc_img);
+
+    cv_bridge::CvImage(image_msg.header, "", desc_img).toImageMsg(
+        image_msg.surf_desc);
 
     ROS_INFO_STREAM(
         "Publishing "
@@ -702,9 +575,192 @@ int main(int argc, char **argv)
       Scalar(int(0.098 * 256), int(0.325 * 256), int(0.850 * 256)));
   ros::init(argc, argv, "piece_parser_node");
   ros::NodeHandle nh;
-  PieceParser p(nh);
+  PieceParser p(nh, 400.0);
   ros::spin();
 
   return 0;
 }
 
+//vector<int> PieceParser::getCorners(vector<Point> piece_contour)
+//{
+//  double x_diff;
+//  double y_diff;
+//  double a_square;
+//  double cos_theta;
+//  // Distance between i and i + this->cos_point_skip
+//  double dist[piece_contour.size()];
+//  double dist_square[piece_contour.size()];
+//  // Minimum cos indices and values.
+//  double min_cos_theta[this->num_corners];
+//  vector<int> corner_indices(this->num_corners);
+//  int i_prev;
+//  int i_next;
+//  int i;
+//  int j;
+//  int k;
+//  int num_min_points_found = 0;
+//
+//  for(i = 0; i < this->num_corners; ++i)
+//  {
+//    min_cos_theta[i] = 2.0;
+//    corner_indices[i] = -1;
+//  }
+//
+//  for(i = 0; i < piece_contour.size(); ++i)
+//  {
+//    // Form a triangle ABC with vertices i, i_next, and i_prev respectively.
+//    i_prev =
+//      (i + piece_contour.size() - this->cos_point_skip)
+//      % piece_contour.size();
+//    i_next = (i + this->cos_point_skip) % piece_contour.size();
+//
+//    // Compute the side A and its square.
+//    x_diff = piece_contour[i_next].x - piece_contour[i_prev].x;
+//    y_diff = piece_contour[i_next].y - piece_contour[i_prev].y;
+//    a_square = ((x_diff * x_diff) + (y_diff - y_diff));
+//
+//    if(i_prev > i)
+//    {
+//      // Compute the size B and its square.
+//      x_diff = piece_contour[i].x - piece_contour[i_prev].x;
+//      y_diff = piece_contour[i].y - piece_contour[i_prev].y;
+//      dist_square[i_prev] = (x_diff * x_diff) + (y_diff - y_diff);
+//      dist[i_prev] = sqrt(dist_square[i_prev]);
+//    }
+//    else
+//    {
+//      // No operation
+//    }
+//
+//    if(i < i_next)
+//    {
+//      // Compute the side C and its square.
+//      x_diff = piece_contour[i_next].x - piece_contour[i].x;
+//      y_diff = piece_contour[i_next].y - piece_contour[i].y;
+//      dist_square[i] = sqrt((x_diff * x_diff) + (y_diff - y_diff));
+//      dist[i] = sqrt(dist_square[i]);
+//    }
+//    else
+//    {
+//      // No operation
+//    }
+//
+//    // Compute cos theta and compare with current minimum.
+//    cos_theta =
+//      abs((dist_square[i_prev] + dist_square[i_next] - a_square)
+//          / (2 * dist[i_prev] * dist[i_next]));
+//
+//    for(j = 0; j < this->num_corners; ++j)
+//    {
+//      if(cos_theta >= min_cos_theta[j])
+//      {
+//        // Insert both the cos value and the index into the list and break.
+//        for(k = 0; k < j; ++k)
+//        {
+//          min_cos_theta[k] = min_cos_theta[k + 1];
+//          corner_indices[k] = corner_indices[k + 1];
+//        }
+//
+//        min_cos_theta[j] = cos_theta;
+//        corner_indices[j] = i;
+//        ++num_min_points_found;
+//
+//        break;
+//      }
+//      else
+//      {
+//        // No operation
+//      }
+//    }
+//  }
+//
+//  ROS_INFO_STREAM(
+//      num_min_points_found
+//      << " corner points found and pruned to "
+//      << this->num_corners
+//      << ".");
+//
+//  return corner_indices;
+//}
+//
+//vector<Point> PieceParser::getEdges(
+//    vector<Point> piece_contour,
+//    int block_size,
+//    int aperture_size,
+//    double harris_free_param)
+//{
+//  int i;
+//  int j;
+//  int k;
+//  // Max corner points is twice that required, to contain the piece corners.
+//  int max_corner_points = 32;
+//  int pixel_dist_threshold = 10;
+//
+//  ROS_INFO("Initializing Harris corner matrix...");
+//  Mat harris_corners = Mat::zeros(this->img_gray.size(), CV_32FC1);
+//  ROS_INFO("Fetching Harris corners...");
+//  cornerHarris(
+//      this->img_gray,
+//      harris_corners,
+//      block_size,
+//      aperture_size,
+//      harris_free_param);
+//  Point corner_points[max_corner_points];
+//  double corner_vals[max_corner_points];
+//  int num_indices = 0;
+//
+//  for(i = 0; i < max_corner_points; ++i)
+//  {
+//    corner_vals[i] = -1e9;
+//    corner_points[i] = Point(0, 0);
+//  }
+//
+//  ROS_INFO("Checking Harris corners for top values...");
+//
+//  for(i = 0; i < piece_contour.size(); ++i)
+//  {
+//    const double harris_val_curr = harris_corners.at<double>(
+//        piece_contour[i].x,
+//        piece_contour[i].y);
+//
+//    for(j = 0; j < max_corner_points; ++j)
+//    {
+//      if(harris_val_curr > corner_vals[j])
+//      {
+//        ++num_indices;
+//
+//        for(k = max_corner_points - 1; k > j; --k)
+//        {
+//          corner_vals[k] = corner_vals[k - 1];
+//          corner_points[k] = corner_points[k - 1];
+//        }
+//
+//        Point temp_pt = Point(piece_contour[i].x, piece_contour[i].y);
+//        corner_vals[j] = harris_val_curr;
+//        corner_points[j] = temp_pt;
+//        i += pixel_dist_threshold;
+//
+//        break;
+//      }
+//      else
+//      {
+//        // No operation
+//      }
+//    }
+//
+//  }
+//
+//  ROS_INFO_STREAM(num_indices << " peak points found.");
+//  ROS_INFO_STREAM("Converting to vector form...");
+//  vector<Point> corner_points_vec;
+//
+//  for(i = 0; i < max_corner_points; ++i)
+//  {
+//    corner_points_vec.push_back(corner_points[i]);
+//  }
+//
+//  ROS_INFO_STREAM("Maximum Harris corner values successfully obtained.");
+//
+//  return corner_points_vec;
+//}
+//

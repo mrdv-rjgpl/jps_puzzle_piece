@@ -32,7 +32,7 @@ TestPieceImageSupplier::TestPieceImageSupplier(ros::NodeHandle& nh)
   this->nh = ros::NodeHandle(nh);
   this->img_transport = new image_transport::ImageTransport(this->nh);
   this->image_pub = this->img_transport->advertise("camera/image", 1);
-  this->timer = this->nh.createTimer(ros::Duration(1.0), &TestPieceImageSupplier::timerCallback, this);
+  this->timer = this->nh.createTimer(ros::Duration(2.0), &TestPieceImageSupplier::timerCallback, this);
 }
 
 void TestPieceImageSupplier::timerCallback(const ros::TimerEvent& event)
