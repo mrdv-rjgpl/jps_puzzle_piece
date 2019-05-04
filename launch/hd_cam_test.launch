@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <launch>
 	<remap from="/piece_parser/input_image" to="/usb_cam/image_raw" />
 	<include file="$(find jps_puzzle_piece)/launch/piece_parser.launch" />
