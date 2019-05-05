@@ -549,8 +549,15 @@ void PieceParser::imageSubscriberCallback(
     // Extract SURF features
     this->extractSurf(piece_contour_f, kp_img, desc_img);
 
-    cv_bridge::CvImage(image_msg.header, "", desc_img).toImageMsg(
+    cv_bridge::CvImage(image_msg.header, sensor_msgs::image_encodings::TYPE_32FC1, desc_img).toImageMsg(
         image_msg.surf_desc);
+
+    for(i = 0; i < kp_img.size(); ++i)
+    {
+      pt_temp.x = (double) kp_img[i].pt.x;
+      pt_temp.y = (double) kp_img[i].pt.y;
+      image_msg.surf_key_points.push_back(pt_temp);
+    }
 
     ROS_INFO_STREAM(
         "Publishing "

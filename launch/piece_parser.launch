@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
 <launch>
 	<param name="piece_parser/bin_threshold" value="125" />
-	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" ns="piece_parser" output="screen" />
+	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" ns="piece_parser" />
 </launch>
