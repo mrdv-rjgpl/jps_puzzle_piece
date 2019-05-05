@@ -449,7 +449,7 @@ void PieceParser::imageSubscriberCallback(
 {
   double dist_center;
   double min_dist_center = 1e12;
-  double resize_factor = 0.8;
+  double resize_factor = 1.0;
   geometry_msgs::Point pt_temp;
   int central_index = -1;
   int i;
