@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   std_msgs
   tf
+  jps_feature_matching
   message_generation
   dynamic_reconfigure
 )
@@ -213,5 +214,8 @@ include_directories(
 add_executable(piece_parser src/piece_parser.cpp)
 add_dependencies(piece_parser ${PROJECT_NAME}_gencfg)
 target_link_libraries(piece_parser ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+add_executable(piece_locator src/piece_locator.cpp)
+add_dependencies(piece_locator ${PROJECT_NAME}_gencfg)
+target_link_libraries(piece_locator ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_executable(test_piece_image_supplier src/test_piece_image_supplier.cpp)
 target_link_libraries(test_piece_image_supplier ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
