@@ -9,21 +9,20 @@ project(jps_puzzle_piece)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
+  dynamic_reconfigure
   geometry_msgs
   image_transport
+  message_generation
   roscpp
   rospy
   sensor_msgs
   std_msgs
   tf
-  jps_feature_matching
-  message_generation
-  dynamic_reconfigure
 )
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED PATHS )
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -128,7 +127,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
 )
@@ -214,8 +213,5 @@ include_directories(
 add_executable(piece_parser src/piece_parser.cpp)
 add_dependencies(piece_parser ${PROJECT_NAME}_gencfg)
 target_link_libraries(piece_parser ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
-add_executable(piece_locator src/piece_locator.cpp)
-add_dependencies(piece_locator ${PROJECT_NAME}_gencfg)
-target_link_libraries(piece_locator ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_executable(test_piece_image_supplier src/test_piece_image_supplier.cpp)
 target_link_libraries(test_piece_image_supplier ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
