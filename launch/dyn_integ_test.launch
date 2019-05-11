@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-	<param name="/piece_parser/bin_threshold" value="125" />
+	<param name="/piece_parser/bin_threshold" value="95" />
 	<remap from="/piece_parser/input_image" to="/usb_cam/image_raw" />
 	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" ns="piece_parser" output="screen" />
 	<node pkg="rqt_reconfigure" type="rqt_reconfigure" name="rqt_reconf_node" />

@@ -604,6 +604,7 @@ void PieceParser::robotStatusCallback(const std_msgs::BoolConstPtr& msg)
     // No operation
   }
 }
+
 int main(int argc, char **argv)
 {
   colours.push_back(
