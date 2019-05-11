@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<launch>
+	<param name="img_file_name" value="$(find jps_puzzle_piece)/dat/sample_pic.png" type="string" />
+	<param name="piece_parser/bin_threshold" value="125" />
+
+	<node pkg="jps_puzzle_piece" type="test_piece_image_supplier" name="test_piece_image_supplier_node" />
+	<node pkg="jps_puzzle_piece" type="piece_parser" name="piece_parser_node" ns="piece_parser">
+		<remap from="/piece_parser/input_image" to="/camera/image" />
+	</node>
+</launch>

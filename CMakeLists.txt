@@ -22,7 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-find_package(OpenCV REQUIRED PATHS )
+find_package(OpenCV REQUIRED PATHS "/usr/local/opencv4/")
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures

@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<launch>
-	<remap from="/piece_parser/input_image" to="/camera/image" />
-	<include file="$(find jps_puzzle_piece)/launch/piece_parser.launch" />
-
-	<node pkg="jps_puzzle_piece" type="test_piece_image_supplier" name="test_piece_image_supplier_node" />
-	<param name="img_file_name" value="$(find jps_puzzle_piece)/dat/sample_pic.png" type="string" />
-</launch>
