@@ -259,6 +259,7 @@ PieceParser::PieceParser(ros::NodeHandle& nh, int min_hessian)
       1,
       &PieceParser::imageSubscriberCallback,
       this);
+  this->robot_status_sub = this->nh.subscribe<std_msgs::Bool>("/moved", 1, &PieceParser::robotStatusCallback, this);
 
   // Setup SURF related objects
   this->surf_detector = SURF::create(min_hessian);
