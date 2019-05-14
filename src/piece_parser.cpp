@@ -34,7 +34,6 @@ vector<Scalar> colours;
 class PieceParser
 {
   private:
-    bool robot_stationary;
     /*
      * \brief Image transporter
      */
@@ -67,10 +66,6 @@ class PieceParser
      * \brief Image publisher object
      */
     ros::Publisher image_pub;
-    /*
-     * \brief Robot status subscriber object
-     */
-    ros::Subscriber robot_status_sub;
     /*
      * \brief Visualization publisher object
      */
@@ -222,14 +217,6 @@ class PieceParser
      * \author Mardava Gubbi <mgubbi1@jhu.edu>
      */
     void imageSubscriberCallback(const sensor_msgs::ImageConstPtr& msg);
-    /*
-     * \brief Callback function for the robot status subscriber object
-     *
-     * \param[in] msg The message indicating whether the robot is stationary or not
-     *
-     * \author Mardava Gubbi <mgubbi1@jhu.edu>
-     */
-    void robotStatusCallback(const std_msgs::BoolConstPtr& msg);
 };
 
 /*
@@ -245,7 +232,6 @@ PieceParser::PieceParser(ros::NodeHandle& nh, int min_hessian)
   this->bin_threshold = 105;
   this->area_threshold = 100000;
   this->num_corners = 4;
-  this->robot_stationary = false;
 
   // Setup publisher objects
   this->image_pub = this->nh.advertise<jps_puzzle_piece::ImageWithContour>(
@@ -259,7 +245,6 @@ PieceParser::PieceParser(ros::NodeHandle& nh, int min_hessian)
       1,
       &PieceParser::imageSubscriberCallback,
       this);
-  this->robot_status_sub = this->nh.subscribe<std_msgs::Bool>("/moved", 1, &PieceParser::robotStatusCallback, this);
 
   // Setup SURF related objects
   this->surf_detector = SURF::create(min_hessian);
@@ -479,7 +464,6 @@ void PieceParser::imageSubscriberCallback(
 
   // Acquire robot status as close as possible to image status
   // so as to avoid it being set after the image.
-  image_msg.robot_stationary = this->robot_stationary;
   resize(
       cv_bridge::toCvShare(msg, "bgr8")->image,
       this->img_raw,
@@ -590,20 +574,6 @@ void PieceParser::imageSubscriberCallback(
 
   vis_msg = cv_bridge::CvImage(std_msgs::Header(), "bgr8", img_vis).toImageMsg();
   this->vis_pub.publish(vis_msg);
-  this->robot_stationary = false;
-}
-
-void PieceParser::robotStatusCallback(const std_msgs::BoolConstPtr& msg)
-{
-  // Latch to 1 if required.
-  if(msg->data == 1)
-  {
-    this->robot_stationary = true;
-  }
-  else
-  {
-    // No operation
-  }
 }
 
 int main(int argc, char **argv)
